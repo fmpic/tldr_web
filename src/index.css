@@ -1,2 +1,5 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+/* 强制启用基于 class 的暗黑模式 */
+@custom-variant dark (&:where(.dark, .dark *));

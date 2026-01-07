@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
-import { Search, Terminal, AlertCircle, Moon, Sun, Github, ArrowUp } from 'lucide-react';
+import { Search, Terminal, AlertCircle, Moon, Sun, Github, ArrowUp, Command } from 'lucide-react';
 import clsx from 'clsx';
 import 'highlight.js/styles/github-dark.css';
 import { useTldrIndex } from './hooks/useTldrIndex';
@@ -71,11 +71,9 @@ function App() {
       return;
     }
     
-    // Simple prefix match, then includes match
     const lowerQuery = query.toLowerCase();
     const exactMatches = indexCommands.filter(c => c.name.toLowerCase().startsWith(lowerQuery)).map(c => c.name);
-    // Limit to 10 suggestions to keep UI clean
-    setSuggestions(exactMatches.slice(0, 10));
+    setSuggestions(exactMatches.slice(0, 8)); // MD3 suggests fewer, cleaner options
   }, [query, indexCommands]);
 
   // Smart Platform Switching
@@ -83,7 +81,6 @@ function App() {
     const cmdData = indexCommands.find(c => c.name === command);
     if (cmdData) {
       const supported = cmdData.platform;
-      // If current platform is not supported, switch to best available
       if (!supported.includes(platform)) {
         if (supported.includes('common')) setPlatform('common');
         else if (supported.includes('linux')) setPlatform('linux');
@@ -92,9 +89,8 @@ function App() {
         else setPlatform(supported[0]);
       }
     }
-  }, [command, indexCommands]); // Keep 'platform' out of dependency to avoid loops, we only want to react to command changes
+  }, [command, indexCommands]); 
 
-  // Fetch content
   const { data, error, isLoading } = useSWR(
     command ? `${BASE_URL}/${platform}/${command}.md` : null,
     fetcher,
@@ -108,8 +104,13 @@ function App() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (query.trim()) {
-      setCommand(query.trim().toLowerCase());
+    
+    // Auto-select first suggestion if available, otherwise use query
+    const targetCommand = suggestions.length > 0 ? suggestions[0] : query.trim().toLowerCase();
+    
+    if (targetCommand) {
+      setQuery(targetCommand);
+      setCommand(targetCommand);
       setShowSuggestions(false);
     }
   };
@@ -120,142 +121,187 @@ function App() {
     setShowSuggestions(false);
   };
 
-  // Determine available platforms for current command (for UI state)
   const currentCmdData = indexCommands.find(c => c.name === command);
   const availablePlatforms = currentCmdData?.platform || PLATFORMS;
 
+  // MD3 Colors: Using Zinc as base neutral, Emerald as Primary
+  // Backgrounds: surface-container-lowest, low, high, etc.
+  
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 flex flex-col font-sans`}>
-      {/* Header */}
-      <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-xl cursor-pointer" onClick={() => {setCommand(''); setQuery('')}}>
-            <div className="bg-emerald-500 text-white p-1.5 rounded-md">
-              <Terminal size={20} />
+    <div className={`min-h-screen bg-[#FDFDF5] dark:bg-[#191C1A] text-[#191C1A] dark:text-[#E2E3DE] transition-colors duration-300 flex flex-col font-sans selection:bg-emerald-200 dark:selection:bg-emerald-800`}>
+      
+      {/* Top App Bar (Small variant) */}
+      <header className="sticky top-0 z-30 bg-[#FDFDF5]/80 dark:bg-[#191C1A]/80 backdrop-blur-md border-b border-transparent transition-colors">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div 
+            className="flex items-center gap-3 cursor-pointer group" 
+            onClick={() => {setCommand(''); setQuery('')}}
+          >
+            <div className="bg-emerald-600 dark:bg-emerald-400 text-white dark:text-[#003825] p-2 rounded-xl shadow-sm group-hover:scale-105 transition-transform duration-200">
+              <Terminal size={20} strokeWidth={2.5} />
             </div>
-            <span>tldr<span className="text-emerald-500">.web</span></span>
+            <span className="font-medium text-xl tracking-tight">tldr<span className="text-emerald-700 dark:text-emerald-300">.web</span></span>
           </div>
           
-          <div className="flex items-center gap-4">
-             <a href="https://github.com/tldr-pages/tldr" target="_blank" rel="noreferrer" className="text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
-              <Github size={20} />
+          <div className="flex items-center gap-2">
+             <a 
+               href="https://github.com/tldr-pages/tldr" 
+               target="_blank" 
+               rel="noreferrer" 
+               className="p-2.5 rounded-full hover:bg-[#E2E3DE] dark:hover:bg-[#414942] text-[#414942] dark:text-[#C1C9BF] transition-colors"
+               aria-label="GitHub"
+             >
+              <Github size={24} />
             </a>
             <button 
               onClick={() => setDarkMode(!darkMode)}
-              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              className="p-2.5 rounded-full hover:bg-[#E2E3DE] dark:hover:bg-[#414942] text-[#414942] dark:text-[#C1C9BF] transition-colors"
+              aria-label="Toggle Theme"
             >
-              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+              {darkMode ? <Sun size={24} /> : <Moon size={24} />}
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
+      <main className="flex-1 max-w-3xl mx-auto px-4 w-full pt-8 pb-20">
         
-        {/* Search & Controls */}
-        <div className="mb-8 space-y-4">
-          <div ref={searchContainerRef} className="relative group">
-            <form onSubmit={handleSearchSubmit}>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400 group-focus-within:text-emerald-500 transition-colors">
-                <Search size={20} />
-              </div>
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                placeholder="Search command (e.g., git, tar, docker)..."
-                className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all shadow-sm"
-                autoFocus
-              />
-            </form>
-            
-            {/* Suggestions Dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden max-h-60 overflow-y-auto">
-                {suggestions.map((cmd) => (
-                  <button
-                    key={cmd}
-                    onClick={() => handleSuggestionClick(cmd)}
-                    className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
-                  >
-                    <Terminal size={14} className="text-gray-400" />
-                    <span>{cmd}</span>
-                  </button>
-                ))}
+        {/* Search Field (MD3 Filled Text Field style but rounded-full) */}
+        <div className="mb-8 relative z-20" ref={searchContainerRef}>
+          <form onSubmit={handleSearchSubmit} className="relative shadow-sm hover:shadow-md focus-within:shadow-md transition-shadow duration-300 rounded-full">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#414942] dark:text-[#C1C9BF]">
+              <Search size={24} />
+            </div>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              placeholder="Search commands..."
+              className="w-full pl-14 pr-6 py-4 bg-[#EEF1ED] dark:bg-[#2C312D] text-lg rounded-full border-none focus:ring-2 focus:ring-emerald-500/50 placeholder:text-[#717971] dark:placeholder:text-[#8B938D] transition-colors"
+              autoFocus
+            />
+            {query && (
+              <div className="absolute inset-y-0 right-4 flex items-center">
+                 <kbd className="hidden sm:inline-flex items-center h-6 px-2 text-xs font-medium text-[#414942] dark:text-[#C1C9BF] bg-white dark:bg-[#414942] rounded-md border border-gray-200 dark:border-gray-600 opacity-60">
+                    <Command size={10} className="mr-1"/> Enter
+                 </kbd>
               </div>
             )}
-          </div>
+          </form>
+          
+          {/* Suggestions Dropdown (MD3 Menu) */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute w-full mt-2 bg-[#EEF1ED] dark:bg-[#2C312D] rounded-[20px] shadow-lg overflow-hidden py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+              {suggestions.map((cmd, index) => (
+                <button
+                  key={cmd}
+                  onClick={() => handleSuggestionClick(cmd)}
+                  className={clsx(
+                    "w-full text-left px-6 py-3 hover:bg-[#DEE5D9] dark:hover:bg-[#414942] transition-colors flex items-center gap-4 text-base",
+                    index !== suggestions.length - 1 && "border-b border-[#C2C9BD]/20 dark:border-[#8B938D]/20"
+                  )}
+                >
+                  <Terminal size={18} className="text-[#414942] dark:text-[#C1C9BF] opacity-70" />
+                  <span>{cmd}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-          {/* Platform Tabs */}
-          <div className="flex overflow-x-auto pb-2 scrollbar-hide gap-2">
+        {/* Platform Chips (MD3 Filter Chips) */}
+        {command && (
+          <div className="flex overflow-x-auto pb-4 scrollbar-hide gap-2 mb-2 px-1">
             {PLATFORMS.map((p) => {
               const isAvailable = availablePlatforms.includes(p);
-              if (!isAvailable && command) return null; // Hide unavailable platforms only if a command is selected
+              if (!isAvailable) return null;
 
+              const isSelected = platform === p;
+              
               return (
                 <button
                   key={p}
                   onClick={() => setPlatform(p)}
                   className={clsx(
-                    "px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors",
-                    platform === p 
-                      ? "bg-emerald-500 text-white shadow-md" 
-                      : "bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700",
-                    !isAvailable && command && "opacity-50 cursor-not-allowed"
+                    "px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all duration-200 border",
+                    isSelected 
+                      ? "bg-[#C2EFD0] dark:bg-[#005138] text-[#002114] dark:text-[#C2EFD0] border-transparent shadow-sm" 
+                      : "bg-transparent border-[#717971] text-[#414942] dark:text-[#E2E3DE] hover:bg-[#EEF1ED] dark:hover:bg-[#2C312D]"
                   )}
-                  disabled={!isAvailable && !!command}
                 >
+                  {isSelected && <span className="mr-1.5 font-bold">✓</span>}
                   {p}
                 </button>
               );
             })}
           </div>
-        </div>
+        )}
 
-        {/* Content Area */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[300px]">
+        {/* Content Card (MD3 Elevated Card) */}
+        <div className={clsx(
+            "rounded-[28px] overflow-hidden transition-all duration-500 ease-out",
+            command ? "bg-[#F0F4F8] dark:bg-[#1E1E1E] shadow-sm min-h-[300px]" : "bg-transparent min-h-[400px] flex items-center justify-center"
+        )}>
           {!command ? (
-             <div className="flex flex-col items-center justify-center h-64 text-gray-400 text-center p-6">
-               <Terminal size={48} className="mb-4 opacity-20" />
-               <h2 className="text-xl font-semibold mb-2 text-gray-600 dark:text-gray-300">Welcome to tldr.web</h2>
-               <p className="max-w-sm">
-                 Simplified and community-driven man pages. <br/>
-                 Start by typing a command in the search box above.
+             <div className="flex flex-col items-center justify-center text-center p-8 animate-in zoom-in-95 duration-500">
+               <div className="bg-[#C2EFD0] dark:bg-[#005138] p-6 rounded-3xl mb-6 shadow-sm">
+                 <Terminal size={64} className="text-[#002114] dark:text-[#C2EFD0]" />
+               </div>
+               <h2 className="text-3xl font-normal mb-3 text-[#191C1A] dark:text-[#E2E3DE]">Welcome to tldr.web</h2>
+               <p className="max-w-md text-[#414942] dark:text-[#C1C9BF] text-lg leading-relaxed">
+                 The community-driven man pages. <br/>
+                 Simplified, practical, and beautiful.
                </p>
              </div>
           ) : isLoading ? (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mb-4"></div>
-              <p>Fetching tldr page...</p>
+            <div className="flex flex-col items-center justify-center h-80 text-[#414942] dark:text-[#C1C9BF]">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-500 mb-6"></div>
+              <p className="text-lg">Fetching knowledge...</p>
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center h-64 text-red-500 p-8 text-center">
-              <AlertCircle size={48} className="mb-4 opacity-50" />
-              <h3 className="text-lg font-bold mb-2">Command not found</h3>
-              <p className="text-gray-500 dark:text-gray-400 max-w-md">
-                Could not find page for <span className="font-mono bg-gray-100 dark:bg-gray-900 px-1 rounded">"{command}"</span> in <span className="font-mono bg-gray-100 dark:bg-gray-900 px-1 rounded">{platform}</span>.
+            <div className="flex flex-col items-center justify-center h-80 p-8 text-center">
+              <div className="bg-[#FFDAD6] dark:bg-[#93000A] p-4 rounded-full mb-4 text-[#410002] dark:text-[#FFDAD6]">
+                <AlertCircle size={40} />
+              </div>
+              <h3 className="text-2xl font-normal mb-2">No entry found</h3>
+              <p className="text-[#414942] dark:text-[#C1C9BF] max-w-md mb-6">
+                We couldn't find a page for <span className="font-mono bg-[#E2E3DE] dark:bg-[#414942] px-2 py-0.5 rounded-md mx-1">"{command}"</span> on <span className="font-mono bg-[#E2E3DE] dark:bg-[#414942] px-2 py-0.5 rounded-md mx-1">{platform}</span>.
               </p>
+              
               {availablePlatforms.length > 0 && availablePlatforms[0] !== platform && (
-                 <div className="mt-4 flex gap-2 justify-center flex-wrap">
-                    {availablePlatforms.map(p => (
-                       <button 
-                         key={p} 
-                         onClick={() => setPlatform(p)}
-                         className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                       >
-                         Try {p}
-                       </button>
-                    ))}
+                 <div className="flex flex-col items-center gap-3">
+                    <span className="text-sm text-[#717971] dark:text-[#8B938D]">Available on:</span>
+                    <div className="flex gap-2 justify-center flex-wrap">
+                      {availablePlatforms.map(p => (
+                        <button 
+                          key={p} 
+                          onClick={() => setPlatform(p)}
+                          className="text-sm bg-[#C2EFD0] dark:bg-[#005138] text-[#002114] dark:text-[#C2EFD0] px-4 py-2 rounded-xl transition-transform hover:scale-105"
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
                  </div>
               )}
             </div>
           ) : (
-            <article className="prose prose-slate dark:prose-invert max-w-none p-6 prose-pre:bg-gray-900 dark:prose-pre:bg-[#0d1117] prose-pre:border dark:prose-pre:border-gray-700 prose-code:text-emerald-600 dark:prose-code:text-emerald-400 prose-headings:text-gray-900 dark:prose-headings:text-gray-100">
+            <article className="
+              p-8 md:p-10
+              prose prose-lg max-w-none 
+              dark:prose-invert
+              prose-headings:font-normal prose-headings:tracking-tight
+              prose-h1:text-4xl prose-h1:mb-6 prose-h1:text-[#002114] dark:prose-h1:text-[#C2EFD0]
+              prose-p:text-[#414942] dark:prose-p:text-[#C1C9BF] prose-p:leading-relaxed
+              prose-code:text-emerald-700 dark:prose-code:text-emerald-300 prose-code:bg-[#E2E3DE] dark:prose-code:bg-[#414942] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
+              prose-pre:bg-[#111411] dark:prose-pre:bg-[#000000] prose-pre:rounded-[20px] prose-pre:p-6 prose-pre:shadow-sm prose-pre:border prose-pre:border-transparent dark:prose-pre:border-[#2C312D]
+              prose-li:marker:text-emerald-500
+            ">
                <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
                 {data || ''}
               </ReactMarkdown>
@@ -264,21 +310,30 @@ function App() {
         </div>
       </main>
 
-      {/* Back to Top Button */}
-      <button
-        onClick={scrollToTop}
-        className={clsx(
-          "fixed bottom-8 right-8 p-3 rounded-full bg-emerald-500 text-white shadow-lg transition-all duration-300 hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 z-50",
-          showBackToTop ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10 pointer-events-none"
-        )}
-        aria-label="Back to top"
-      >
-        <ArrowUp size={24} />
-      </button>
+      {/* FAB (Floating Action Button) - MD3 Standard */}
+      <div className={clsx(
+        "fixed bottom-8 right-8 z-50 transition-all duration-500 ease-out transform",
+        showBackToTop ? "translate-y-0 opacity-100" : "translate-y-20 opacity-0 pointer-events-none"
+      )}>
+        <button
+          onClick={scrollToTop}
+          className="
+            flex items-center justify-center w-14 h-14 
+            bg-[#C2EFD0] dark:bg-[#005138] 
+            text-[#002114] dark:text-[#C2EFD0] 
+            rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 
+            transition-all duration-300
+            focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500
+          "
+          aria-label="Back to top"
+        >
+          <ArrowUp size={24} />
+        </button>
+      </div>
 
       {/* Footer */}
-      <footer className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-        <p>Powered by <a href="https://github.com/tldr-pages/tldr" className="underline hover:text-emerald-500">tldr-pages</a></p>
+      <footer className="py-8 text-center text-sm text-[#717971] dark:text-[#8B938D]">
+        <p>Powered by <a href="https://github.com/tldr-pages/tldr" className="underline hover:text-emerald-600 dark:hover:text-emerald-400 decoration-2 decoration-transparent hover:decoration-current transition-all">tldr-pages</a> & Material You</p>
       </footer>
     </div>
   );
