@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
-import { Search, Terminal, AlertCircle, Moon, Sun, Github, ArrowUp, Command, History } from 'lucide-react';
+import { Search, Terminal, AlertCircle, Moon, Sun, Github, ArrowUp, Command, History, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 import 'highlight.js/styles/github-dark.css';
 import { useTldrIndex } from './hooks/useTldrIndex';
@@ -54,6 +54,11 @@ function App() {
       localStorage.setItem('tldr_recent_searches', JSON.stringify(newHistory));
       return newHistory;
     });
+  };
+
+  const clearHistory = () => {
+    setRecentSearches([]);
+    localStorage.removeItem('tldr_recent_searches');
   };
 
   // Listen for system theme changes
@@ -272,9 +277,19 @@ function App() {
         {/* Recent Searches Section */}
         {recentSearches.length > 0 && !command && (
           <div className="mb-8 px-2 animate-in fade-in slide-in-from-top-4 duration-500 delay-100">
-             <div className="flex items-center gap-2 mb-3 text-sm font-medium text-[#717971] dark:text-[#8B938D]">
-               <History size={16} />
-               <span>Recent Searches</span>
+             <div className="flex items-center justify-between mb-3 text-sm font-medium text-[#717971] dark:text-[#8B938D]">
+               <div className="flex items-center gap-2">
+                 <History size={16} />
+                 <span>Recent Searches</span>
+               </div>
+               <button 
+                 onClick={clearHistory}
+                 className="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors px-2 py-1 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20"
+                 aria-label="Clear history"
+               >
+                 <Trash2 size={14} />
+                 <span className="text-xs">Clear</span>
+               </button>
              </div>
              <div className="flex flex-wrap gap-2">
                {recentSearches.map(term => (
