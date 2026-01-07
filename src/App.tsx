@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
-import { Search, Terminal, AlertCircle, Moon, Sun, Github, ArrowUp, Command } from 'lucide-react';
+import { Search, Terminal, AlertCircle, Moon, Sun, Github, ArrowUp, Command, History } from 'lucide-react';
 import clsx from 'clsx';
 import 'highlight.js/styles/github-dark.css';
 import { useTldrIndex } from './hooks/useTldrIndex';
@@ -20,16 +20,50 @@ function App() {
   const [query, setQuery] = useState('');
   const [command, setCommand] = useState(''); 
   const [platform, setPlatform] = useState('common');
-  const [darkMode, setDarkMode] = useState(true);
+  
+  // Initialize Dark Mode from system preference
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return true;
+  });
+  
   const [showBackToTop, setShowBackToTop] = useState(false);
   
   // Autocomplete state
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('tldr_recent_searches');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   // Load Index
   const { commands: indexCommands } = useTldrIndex();
+
+  const addToHistory = (cmd: string) => {
+    setRecentSearches(prev => {
+      const newHistory = [cmd, ...prev.filter(c => c !== cmd)].slice(0, 8);
+      localStorage.setItem('tldr_recent_searches', JSON.stringify(newHistory));
+      return newHistory;
+    });
+  };
+
+  // Listen for system theme changes
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => setDarkMode(e.matches);
+    
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   // Toggle Dark Mode
   useEffect(() => {
@@ -68,12 +102,14 @@ function App() {
   useEffect(() => {
     if (!query.trim()) {
       setSuggestions([]);
+      setSelectedIndex(0);
       return;
     }
     
     const lowerQuery = query.toLowerCase();
     const exactMatches = indexCommands.filter(c => c.name.toLowerCase().startsWith(lowerQuery)).map(c => c.name);
     setSuggestions(exactMatches.slice(0, 8)); // MD3 suggests fewer, cleaner options
+    setSelectedIndex(0);
   }, [query, indexCommands]);
 
   // Smart Platform Switching
@@ -105,13 +141,28 @@ function App() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Auto-select first suggestion if available, otherwise use query
-    const targetCommand = suggestions.length > 0 ? suggestions[0] : query.trim().toLowerCase();
+    // Auto-select selected suggestion if available, otherwise use query
+    const targetCommand = (suggestions.length > 0 && selectedIndex >= 0 && selectedIndex < suggestions.length)
+      ? suggestions[selectedIndex]
+      : query.trim().toLowerCase();
     
     if (targetCommand) {
       setQuery(targetCommand);
       setCommand(targetCommand);
       setShowSuggestions(false);
+      addToHistory(targetCommand);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
     }
   };
 
@@ -119,6 +170,7 @@ function App() {
     setQuery(cmdName);
     setCommand(cmdName);
     setShowSuggestions(false);
+    addToHistory(cmdName);
   };
 
   const currentCmdData = indexCommands.find(c => c.name === command);
@@ -180,6 +232,7 @@ function App() {
                 setQuery(e.target.value);
                 setShowSuggestions(true);
               }}
+              onKeyDown={handleKeyDown}
               onFocus={() => setShowSuggestions(true)}
               placeholder="Search commands..."
               className="w-full pl-14 pr-6 py-4 bg-[#EEF1ED] dark:bg-[#2C312D] text-lg rounded-full border-none focus:ring-2 focus:ring-emerald-500/50 placeholder:text-[#717971] dark:placeholder:text-[#8B938D] transition-colors"
@@ -201,8 +254,10 @@ function App() {
                 <button
                   key={cmd}
                   onClick={() => handleSuggestionClick(cmd)}
+                  onMouseEnter={() => setSelectedIndex(index)}
                   className={clsx(
-                    "w-full text-left px-6 py-3 hover:bg-[#DEE5D9] dark:hover:bg-[#414942] transition-colors flex items-center gap-4 text-base",
+                    "w-full text-left px-6 py-3 transition-colors flex items-center gap-4 text-base",
+                    index === selectedIndex ? "bg-[#DEE5D9] dark:bg-[#414942]" : "hover:bg-[#DEE5D9] dark:hover:bg-[#414942]",
                     index !== suggestions.length - 1 && "border-b border-[#C2C9BD]/20 dark:border-[#8B938D]/20"
                   )}
                 >
@@ -213,6 +268,32 @@ function App() {
             </div>
           )}
         </div>
+
+        {/* Recent Searches Section */}
+        {recentSearches.length > 0 && !command && (
+          <div className="mb-8 px-2 animate-in fade-in slide-in-from-top-4 duration-500 delay-100">
+             <div className="flex items-center gap-2 mb-3 text-sm font-medium text-[#717971] dark:text-[#8B938D]">
+               <History size={16} />
+               <span>Recent Searches</span>
+             </div>
+             <div className="flex flex-wrap gap-2">
+               {recentSearches.map(term => (
+                 <button
+                   key={term}
+                   onClick={() => handleSuggestionClick(term)}
+                   className="
+                     px-4 py-1.5 rounded-lg text-sm transition-colors
+                     bg-[#EEF1ED] dark:bg-[#2C312D] text-[#414942] dark:text-[#C1C9BF]
+                     hover:bg-[#DEE5D9] dark:hover:bg-[#414942]
+                     flex items-center gap-2
+                   "
+                 >
+                   {term}
+                 </button>
+               ))}
+             </div>
+          </div>
+        )}
 
         {/* Platform Chips (MD3 Filter Chips) */}
         {command && (
@@ -292,14 +373,14 @@ function App() {
             </div>
           ) : (
             <article className="
-              p-8 md:p-10
+              p-5 sm:p-8 md:p-10
               prose prose-lg max-w-none 
               dark:prose-invert
               prose-headings:font-normal prose-headings:tracking-tight
               prose-h1:text-4xl prose-h1:mb-6 prose-h1:text-[#002114] dark:prose-h1:text-[#C2EFD0]
               prose-p:text-[#414942] dark:prose-p:text-[#C1C9BF] prose-p:leading-relaxed
               prose-code:text-emerald-700 dark:prose-code:text-emerald-300 prose-code:bg-[#E2E3DE] dark:prose-code:bg-[#414942] prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
-              prose-pre:bg-[#111411] dark:prose-pre:bg-[#000000] prose-pre:rounded-[20px] prose-pre:p-6 prose-pre:shadow-sm prose-pre:border prose-pre:border-transparent dark:prose-pre:border-[#2C312D]
+              prose-pre:bg-[#111411] dark:prose-pre:bg-[#000000] prose-pre:rounded-[20px] prose-pre:p-5 sm:prose-pre:p-6 prose-pre:shadow-sm prose-pre:border prose-pre:border-transparent dark:prose-pre:border-[#2C312D] prose-pre:overflow-x-auto
               prose-li:marker:text-emerald-500
             ">
                <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
