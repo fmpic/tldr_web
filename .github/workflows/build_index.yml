@@ -53,12 +53,12 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          git fetch origin main
-          git reset --soft origin/main
+          git fetch origin master
+          git reset --soft origin/master
 
           git commit -m "update index ($(date -d '+8 hour' +'%Y-%m-%d %H:%M:%S CST'))" || echo "⚠️ no update in index"
 
-          git push origin main
+          git push origin master
 
       - name: Delete workflow runs
         uses: Mattraks/delete-workflow-runs@main
