@@ -1,9 +1,9 @@
 import useSWR from 'swr';
 import type { TldrIndex } from '../types';
 
-const INDEX_URL = 'https://raw.githubusercontent.com/tldr-pages/tldr-pages.github.io/main/assets/index.json';
+const INDEX_URL = 'index.json';
 const CACHE_KEY = 'tldr_index_v1';
-const CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CACHE_EXPIRY = 3 * 24 * 60 * 60 * 1000; // 7 days
 
 const fetcher = async (url: string) => {
   // Try to get from local storage first

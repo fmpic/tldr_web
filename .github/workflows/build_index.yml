@@ -1,0 +1,67 @@
+name: Sync Upstream and Build Index
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "0 20 * * 0"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write # 删除 workflow runs
+
+    steps:
+      - name: Checkout Self Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Checkout Upstream Repo
+        uses: actions/checkout@v4
+        with:
+          repository: tldr-pages/tldr
+          path: tldr
+          sparse-checkout: |
+            package.json
+            package-lock.json
+            pages
+            pages.en
+            scripts
+
+      - name: Build Index
+        run: |
+          cd tldr
+          npm install
+          cd ../
+          node tldr/scripts/build-index.js > index.json
+          rm -rf tldr
+
+      - name: Check for changes
+        run: |
+          git add index.json
+          git diff --cached --quiet || echo "changed=true" >> $GITHUB_ENV
+
+      - name: Commit and push
+        if: env.changed == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin main
+          git reset --soft origin/main
+
+          git commit -m "update index ($(date -d '+8 hour' +'%Y-%m-%d %H:%M:%S CST'))" || echo "⚠️ no update in index"
+
+          git push origin main
+
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          retain_days: 0
+          keep_minimum_runs: 5
