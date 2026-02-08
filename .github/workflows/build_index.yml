@@ -38,13 +38,13 @@ jobs:
         run: |
           cd tldr
           npm install
-          node scripts/build-index.js > index.json
+          node scripts/build-index.js > ../public/index.json
           cd ../
           rm -rf tldr
 
       - name: Check for changes
         run: |
-          git add index.json
+          git add public/index.json
           git diff --cached --quiet || echo "changed=true" >> $GITHUB_ENV
 
       - name: Commit and push
