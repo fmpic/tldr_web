@@ -38,8 +38,8 @@ jobs:
         run: |
           cd tldr
           npm install
+          node scripts/build-index.js > index.json
           cd ../
-          node tldr/scripts/build-index.js > index.json
           rm -rf tldr
 
       - name: Check for changes
